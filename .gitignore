@@ -1,0 +1,4 @@
+.DS_Store
+CustomSaveData/Dependencies/*
+CustomSaveData/bin
+CustomSaveData/obj
