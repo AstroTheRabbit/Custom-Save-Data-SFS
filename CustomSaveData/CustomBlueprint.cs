@@ -13,32 +13,19 @@ using SFS.Builds;
 using SFS.Parsers.Json;
 using SFS.Translations;
 using SFS.Parts.Modules;
+using UniverseLib;
 
 namespace CustomSaveData
 {
     [Serializable]
     public class CustomBlueprint : Blueprint
     {
+        static CustomBlueprint() {}
         /// <summary>
         /// The custom data of a <c>CustomBlueprint</c>. Do not access directly; use <c>CustomBlueprint.AddCustomData</c> and <c>CustomBlueprint.GetCustomData</c> instead.
         /// </summary>
         [JsonProperty]
         public Dictionary<string, object> customData = new Dictionary<string, object>();
-        
-        /// <summary>
-        /// Called before a <c>CustomBlueprint</c> is saved. Can be used to add custom data to the <c>CustomBlueprint</c> before it is saved.
-        /// </summary>
-        public static OptionalDelegate<CustomBlueprint> OnSave { get; set; } = new OptionalDelegate<CustomBlueprint>();
-
-        /// <summary>
-        /// Called after <c>CustomBlueprint</c> is loaded. Can be used to load custom data from <c>CustomBlueprint</c>.
-        /// </summary>
-        public static OptionalDelegate<CustomBlueprint> OnLoad { get; set; } = new OptionalDelegate<CustomBlueprint>();
-
-        /// <summary>
-        /// Called when a <c>CustomBlueprint</c> is launched. Can be used to transfer custom data from a launched <c>CustomBlueprint</c> to its resulting <c>Rocket[]</c>.
-        /// </summary>
-        public static OptionalDelegate<(CustomBlueprint, Rocket[])> OnLaunch { get; set; } = new OptionalDelegate<(CustomBlueprint, Rocket[])>();
 
         [JsonConstructor]
         public CustomBlueprint() : base() { }
@@ -78,6 +65,39 @@ namespace CustomSaveData
         }
     }
 
+    public static class CustomBlueprintHelper
+    {
+        /// <summary>
+        /// Called before a <c>CustomBlueprint</c> is saved. Can be used to add custom data to the <c>CustomBlueprint</c> before it is saved.
+        /// </summary>
+        public static Action<CustomBlueprint> onSave;
+
+        /// <summary>
+        /// Called after <c>CustomBlueprint</c> is loaded. Can be used to load custom data from <c>CustomBlueprint</c>.
+        /// </summary>
+        public static Action<CustomBlueprint> onLoad;
+
+        /// <summary>
+        /// Called when a <c>CustomBlueprint</c> is launched. Can be used to transfer custom data from a launched <c>CustomBlueprint</c> to its resulting <c>Rocket[]</c> and <c>Part[]</c> arrays.
+        /// </summary>
+        public static Action<CustomBlueprint, Rocket[], Part[]> onLaunch;
+
+        public static void AddOnSave(Action<CustomBlueprint> onSaveDelegate)
+        {
+            onSave = (Action<CustomBlueprint>) Delegate.Combine(onSave, onSaveDelegate);
+        }
+
+        public static void AddOnLoad(Action<CustomBlueprint> onLoadDelegate)
+        {
+            onLoad = (Action<CustomBlueprint>) Delegate.Combine(onLoad, onLoadDelegate);
+        }
+
+        public static void AddOnLaunch(Action<CustomBlueprint, Rocket[], Part[]> onLaunchDelegate)
+        {
+            onLaunch = (Action<CustomBlueprint, Rocket[], Part[]>) Delegate.Combine(onLaunch, onLaunchDelegate);
+        }
+    }
+
     namespace Patches
     {
         [HarmonyPatch(typeof(BuildState), nameof(BuildState.GetBlueprint))]
@@ -86,7 +106,7 @@ namespace CustomSaveData
             static void Postfix(ref Blueprint __result)
             {
                 CustomBlueprint res = new CustomBlueprint(__result);
-                CustomBlueprint.OnSave.Invoke(res);
+                CustomBlueprintHelper.onSave?.Invoke(res);
                 __result = res;
             }
         }
@@ -99,7 +119,7 @@ namespace CustomSaveData
                 if (path.FolderExists() && JsonWrapper.TryLoadJson(path.ExtendToFile("Blueprint.txt"), out CustomBlueprint customBlueprint))
                 {
                     blueprint = customBlueprint;
-                    CustomBlueprint.OnLoad.Invoke(customBlueprint);
+                    CustomBlueprintHelper.onLoad?.Invoke(customBlueprint);
                     __result = true;
                 }
                 else
@@ -128,7 +148,7 @@ namespace CustomSaveData
                     }
                 }
                 Part[] parts = PartsLoader.CreateParts(blueprint.parts, null, null, OnPartNotOwned.Delete, out OwnershipState[] ownershipState);
-                Part[] successfulParts = parts.Where((Part a) => a != null).ToArray();
+                Part[] successfulParts = parts.Where((Part a) => a == null).ToArray();
                 if (blueprint.rotation != 0f)
                 {
                     PartSave[] partSaves = blueprint.parts;
@@ -145,7 +165,7 @@ namespace CustomSaveData
                 Rocket rocket = rockets.FirstOrDefault((Rocket a) => a.hasControl.Value);
                 PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
 
-                CustomBlueprint.OnLaunch.Invoke(((CustomBlueprint) blueprint, rockets));
+                CustomBlueprintHelper.onLaunch?.Invoke((CustomBlueprint) blueprint, rockets, parts);
                 return false;
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
@@ -18,7 +19,6 @@ using SFS.Translations;
 using SFS.Parsers.Json;
 using SFS.Parts.Modules;
 using static SFS.World.WorldSave;
-using System.Reflection.Emit;
 
 namespace CustomSaveData
 {
@@ -31,16 +31,6 @@ namespace CustomSaveData
         /// </summary>
         [JsonProperty]
         public Dictionary<string, object> customData = new Dictionary<string, object>();
-
-        /// <summary>
-        /// Called when a <c>WorldSave</c> is created. Can be used to tranfer custom data from each <c>Rocket</c> to its respective <c>CustomRocketSave</c>.
-        /// </summary>
-        public static OptionalDelegate<(CustomRocketSave, Rocket)> OnSave { get; set; } = new OptionalDelegate<(CustomRocketSave, Rocket)>();
-
-        /// <summary>
-        /// Called when a <c>CustomRocketSave</c> is spawned into the world. Can be used to tranfer custom data from each <c>CustomRocketSave</c> to its respective <c>Rocket</c>.
-        /// </summary>
-        public static OptionalDelegate<(CustomRocketSave, Rocket)> OnLoad { get; set; } = new OptionalDelegate<(CustomRocketSave, Rocket)>();
 
         [JsonConstructor]
         public CustomRocketSave() : base() { }
@@ -83,6 +73,29 @@ namespace CustomSaveData
                 }
             }
             return default;
+        }
+    }
+
+    public static class CustomRocketSaveHelper
+    {
+        /// <summary>
+        /// Called when a <c>WorldSave</c> is created. Can be used to tranfer custom data from each <c>Rocket</c> to its respective <c>CustomRocketSave</c>.
+        /// </summary>
+        public static Action<CustomRocketSave, Rocket> onSave = null;
+
+        /// <summary>
+        /// Called when a <c>CustomRocketSave</c> is spawned into the world. Can be used to tranfer custom data from each <c>CustomRocketSave</c> to its respective <c>Rocket</c>.
+        /// </summary>
+        public static Action<CustomRocketSave, Rocket> onLoad = null;
+
+        public static void AddOnSave(Action<CustomRocketSave, Rocket> onSaveDelegate)
+        {
+            onSave = (Action<CustomRocketSave, Rocket>) Delegate.Combine(onSave, onSaveDelegate);
+        }
+
+        public static void AddOnLoad(Action<CustomRocketSave, Rocket> onLoadDelegate)
+        {
+            onLoad = (Action<CustomRocketSave, Rocket>) Delegate.Combine(onLoad, onLoadDelegate);
         }
     }
 
@@ -148,7 +161,7 @@ namespace CustomSaveData
                     rocket.staging.editMode.Value = rocketSave.staging_EditMode;
                     rocket.stats.Load(rocketSave.branch);
 
-                    CustomRocketSave.OnLoad.Invoke(((CustomRocketSave) rocketSave, rocket));
+                    CustomRocketSaveHelper.onLoad?.Invoke((CustomRocketSave) rocketSave, rocket);
                 }
                 return false;
             }
@@ -184,7 +197,7 @@ namespace CustomSaveData
                     __instance.rockets.Select((Rocket rocket) =>
                     {
                         CustomRocketSave rocketSave = new CustomRocketSave(new RocketSave(rocket));
-                        CustomRocketSave.OnSave.Invoke((rocketSave, rocket));
+                        CustomRocketSaveHelper.onSave?.Invoke(rocketSave, rocket);
                         return rocketSave;
                         
                     }).ToArray(),
@@ -204,7 +217,7 @@ namespace CustomSaveData
                 if (saveRocketsAndBranches)
                 {
                     CustomRocketSave[] rockets = (CustomRocketSave[]) worldSave.rockets;
-                    JsonWrapper.SaveAsJson(path.ExtendToFile("Rockets.txt"), rockets, pretty: true);
+                    JsonWrapper.SaveAsJson(path.ExtendToFile("Rockets.txt"), rockets, false);
                 }
             }
 
