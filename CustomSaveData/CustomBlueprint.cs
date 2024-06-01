@@ -70,31 +70,32 @@ namespace CustomSaveData
         /// <summary>
         /// Called before a <c>CustomBlueprint</c> is saved. Can be used to add custom data to the <c>CustomBlueprint</c> before it is saved.
         /// </summary>
-        public static Action<CustomBlueprint> onSave;
+        public static event Action<CustomBlueprint> OnSave;
 
         /// <summary>
         /// Called after <c>CustomBlueprint</c> is loaded. Can be used to load custom data from <c>CustomBlueprint</c>.
         /// </summary>
-        public static Action<CustomBlueprint> onLoad;
+        public static event Action<CustomBlueprint> OnLoad;
 
         /// <summary>
         /// Called when a <c>CustomBlueprint</c> is launched. Can be used to transfer custom data from a launched <c>CustomBlueprint</c> to its resulting <c>Rocket[]</c> and <c>Part[]</c> arrays.
         /// </summary>
-        public static Action<CustomBlueprint, Rocket[], Part[]> onLaunch;
+        public static event Action<CustomBlueprint, Rocket[], Part[]> OnLaunch;
 
-        public static void AddOnSave(Action<CustomBlueprint> onSaveDelegate)
+        internal static void Invoke_OnSave(CustomBlueprint blueprint)
         {
-            onSave = (Action<CustomBlueprint>) Delegate.Combine(onSave, onSaveDelegate);
+            Debug.Log("BP.OnSave? " + (OnSave == null).ToString());
+            OnSave?.Invoke(blueprint);
         }
 
-        public static void AddOnLoad(Action<CustomBlueprint> onLoadDelegate)
+        internal static void Invoke_OnLoad(CustomBlueprint blueprint)
         {
-            onLoad = (Action<CustomBlueprint>) Delegate.Combine(onLoad, onLoadDelegate);
+            OnLoad?.Invoke(blueprint);
         }
 
-        public static void AddOnLaunch(Action<CustomBlueprint, Rocket[], Part[]> onLaunchDelegate)
+        internal static void Invoke_OnLaunch(CustomBlueprint blueprint, Rocket[] rockets, Part[] parts)
         {
-            onLaunch = (Action<CustomBlueprint, Rocket[], Part[]>) Delegate.Combine(onLaunch, onLaunchDelegate);
+            OnLaunch?.Invoke(blueprint, rockets, parts);
         }
     }
 
@@ -106,7 +107,7 @@ namespace CustomSaveData
             static void Postfix(ref Blueprint __result)
             {
                 CustomBlueprint res = new CustomBlueprint(__result);
-                CustomBlueprintHelper.onSave?.Invoke(res);
+                CustomBlueprintHelper.Invoke_OnSave(res);
                 __result = res;
             }
         }
@@ -119,7 +120,7 @@ namespace CustomSaveData
                 if (path.FolderExists() && JsonWrapper.TryLoadJson(path.ExtendToFile("Blueprint.txt"), out CustomBlueprint customBlueprint))
                 {
                     blueprint = customBlueprint;
-                    CustomBlueprintHelper.onLoad?.Invoke(customBlueprint);
+                    CustomBlueprintHelper.Invoke_OnLoad(customBlueprint);
                     __result = true;
                 }
                 else
@@ -165,7 +166,7 @@ namespace CustomSaveData
                 Rocket rocket = rockets.FirstOrDefault((Rocket a) => a.hasControl.Value);
                 PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
 
-                CustomBlueprintHelper.onLaunch?.Invoke((CustomBlueprint) blueprint, rockets, parts);
+                CustomBlueprintHelper.Invoke_OnLaunch((CustomBlueprint) blueprint, rockets, parts);
                 return false;
             }
 

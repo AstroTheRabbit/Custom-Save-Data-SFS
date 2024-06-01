@@ -81,21 +81,21 @@ namespace CustomSaveData
         /// <summary>
         /// Called when a <c>WorldSave</c> is created. Can be used to tranfer custom data from each <c>Rocket</c> to its respective <c>CustomRocketSave</c>.
         /// </summary>
-        public static Action<CustomRocketSave, Rocket> onSave = null;
+        public static event Action<CustomRocketSave, Rocket> OnSave;
 
         /// <summary>
         /// Called when a <c>CustomRocketSave</c> is spawned into the world. Can be used to tranfer custom data from each <c>CustomRocketSave</c> to its respective <c>Rocket</c>.
         /// </summary>
-        public static Action<CustomRocketSave, Rocket> onLoad = null;
+        public static event Action<CustomRocketSave, Rocket> OnLoad;
 
-        public static void AddOnSave(Action<CustomRocketSave, Rocket> onSaveDelegate)
+        public static void Invoke_OnSave(CustomRocketSave rocketSave, Rocket rocket)
         {
-            onSave = (Action<CustomRocketSave, Rocket>) Delegate.Combine(onSave, onSaveDelegate);
+            OnSave?.Invoke(rocketSave, rocket);
         }
 
-        public static void AddOnLoad(Action<CustomRocketSave, Rocket> onLoadDelegate)
+        public static void Invoke_OnLoad(CustomRocketSave rocketSave, Rocket rocket)
         {
-            onLoad = (Action<CustomRocketSave, Rocket>) Delegate.Combine(onLoad, onLoadDelegate);
+            OnLoad?.Invoke(rocketSave, rocket);
         }
     }
 
@@ -161,7 +161,7 @@ namespace CustomSaveData
                     rocket.staging.editMode.Value = rocketSave.staging_EditMode;
                     rocket.stats.Load(rocketSave.branch);
 
-                    CustomRocketSaveHelper.onLoad?.Invoke((CustomRocketSave) rocketSave, rocket);
+                    CustomRocketSaveHelper.Invoke_OnLoad((CustomRocketSave) rocketSave, rocket);
                 }
                 return false;
             }
@@ -197,7 +197,7 @@ namespace CustomSaveData
                     __instance.rockets.Select((Rocket rocket) =>
                     {
                         CustomRocketSave rocketSave = new CustomRocketSave(new RocketSave(rocket));
-                        CustomRocketSaveHelper.onSave?.Invoke(rocketSave, rocket);
+                        CustomRocketSaveHelper.Invoke_OnSave(rocketSave, rocket);
                         return rocketSave;
                         
                     }).ToArray(),
