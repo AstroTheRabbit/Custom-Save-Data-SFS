@@ -19,8 +19,11 @@ namespace CustomSaveData
     [Serializable]
     public class CustomBlueprint : Blueprint
     {
+        /// <summary>
+        /// The custom data of a <c>CustomBlueprint</c>. Do not access directly; use <c>CustomBlueprint.AddCustomData</c> and <c>CustomBlueprint.GetCustomData</c> instead.
+        /// </summary>
         [JsonProperty]
-        private Dictionary<string, object> customData = new Dictionary<string, object>();
+        public Dictionary<string, object> customData = new Dictionary<string, object>();
         
         /// <summary>
         /// Called before a <c>CustomBlueprint</c> is saved. Can be used to add custom data to the <c>CustomBlueprint</c> before it is saved.

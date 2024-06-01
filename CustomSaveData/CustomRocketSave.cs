@@ -26,8 +26,11 @@ namespace CustomSaveData
     [JsonConverter(typeof(LocationData.LocationConverter))]
     public class CustomRocketSave : RocketSave
     {
+        /// <summary>
+        /// The custom data of a <c>CustomRocketSave</c>. Do not access directly; use <c>CustomRocketSave.AddCustomData</c> and <c>CustomRocketSave.GetCustomData</c> instead.
+        /// </summary>
         [JsonProperty]
-        private Dictionary<string, object> customData = new Dictionary<string, object>() { { "test_id", 12321 } };
+        public Dictionary<string, object> customData = new Dictionary<string, object>();
 
         /// <summary>
         /// Called when a <c>WorldSave</c> is created. Can be used to tranfer custom data from each <c>Rocket</c> to its respective <c>CustomRocketSave</c>.
@@ -107,9 +110,6 @@ namespace CustomSaveData
                     HashSet<LogId> achievements = JsonWrapper.TryLoadJson(path.ExtendToFile("Achievements.txt"), out List<LogId> out_achievements) ? out_achievements.ToHashSet() : new HashSet<LogId>();
                     HashSet<string> challenges = JsonWrapper.TryLoadJson(path.ExtendToFile("Challenges.txt"), out List<string> out_challenges) ? out_challenges.ToHashSet() : new HashSet<string>();
                     worldSave = new WorldSave(version, careerState, astronauts, worldState, rocketSaves, branches, achievements, challenges);
-                    Debug.Log("WorldSave.TryLoad");
-                    Debug.Log(worldSave.rockets != null);
-                    Debug.Log(worldSave.rockets?[0]?.GetType().Name);
                     __result = true;
                 }
                 return false;
@@ -121,10 +121,6 @@ namespace CustomSaveData
         {
             static bool Prefix(RocketSave rocketSave, ref bool hasNonOwnedParts)
             {
-                Debug.Log("RocketManager.LoadRocket");
-                Debug.Log(rocketSave != null);
-                Debug.Log(rocketSave?.GetType().Name);
-
                 hasNonOwnedParts = false;
                 if (rocketSave.location.address.HasPlanet())
                 {
@@ -209,7 +205,6 @@ namespace CustomSaveData
                 {
                     CustomRocketSave[] rockets = (CustomRocketSave[]) worldSave.rockets;
                     JsonWrapper.SaveAsJson(path.ExtendToFile("Rockets.txt"), rockets, pretty: true);
-                    JsonWrapper.SaveAsJson(path.ExtendToFile("RocketTest.txt"), (CustomRocketSave) worldSave.rockets[0], pretty: true);
                 }
             }
 
