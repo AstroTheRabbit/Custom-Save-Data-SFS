@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SFS;
 using SFS.IO;
 using SFS.World;
@@ -13,7 +14,6 @@ using SFS.Builds;
 using SFS.Parsers.Json;
 using SFS.Translations;
 using SFS.Parts.Modules;
-using UniverseLib;
 
 namespace CustomSaveData
 {
@@ -25,7 +25,7 @@ namespace CustomSaveData
         /// The custom data of a <c>CustomBlueprint</c>. Do not access directly; use <c>CustomBlueprint.AddCustomData</c> and <c>CustomBlueprint.GetCustomData</c> instead.
         /// </summary>
         [JsonProperty]
-        public Dictionary<string, object> customData = new Dictionary<string, object>();
+        public Dictionary<string, JToken> customData = new Dictionary<string, JToken>();
 
         [JsonConstructor]
         public CustomBlueprint() : base() { }
@@ -42,7 +42,7 @@ namespace CustomSaveData
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, data);
+            customData.Add(id, JToken.FromObject(data));
         }
 
         public void RemoveCustomData(string id)
@@ -53,9 +53,9 @@ namespace CustomSaveData
         public D GetCustomData<D>(string id, out bool successful)
         {
             successful = false;
-            if (customData.TryGetValue(id, out object data))
+            if (customData.TryGetValue(id, out JToken data))
             {
-                if (data is D typedData)
+                if (data.ToObject<D>() is D typedData)
                 {
                     successful = true;
                     return typedData;
@@ -65,37 +65,57 @@ namespace CustomSaveData
         }
     }
 
-    public static class CustomBlueprintHelper
+    public class CustomBlueprintHelper
     {
         /// <summary>
         /// Called before a <c>CustomBlueprint</c> is saved. Can be used to add custom data to the <c>CustomBlueprint</c> before it is saved.
         /// </summary>
-        public static event Action<CustomBlueprint> OnSave;
+        public event Action<CustomBlueprint> OnSave;
 
         /// <summary>
         /// Called after <c>CustomBlueprint</c> is loaded. Can be used to load custom data from <c>CustomBlueprint</c>.
         /// </summary>
-        public static event Action<CustomBlueprint> OnLoad;
+        public event Action<CustomBlueprint> OnLoad;
 
         /// <summary>
         /// Called when a <c>CustomBlueprint</c> is launched. Can be used to transfer custom data from a launched <c>CustomBlueprint</c> to its resulting <c>Rocket[]</c> and <c>Part[]</c> arrays.
         /// </summary>
-        public static event Action<CustomBlueprint, Rocket[], Part[]> OnLaunch;
+        public event Action<CustomBlueprint, Rocket[], Part[]> OnLaunch;
 
-        internal static void Invoke_OnSave(CustomBlueprint blueprint)
+        internal void Invoke_OnSave(CustomBlueprint blueprint)
         {
-            Debug.Log("BP.OnSave? " + (OnSave == null).ToString());
-            OnSave?.Invoke(blueprint);
+            try
+            {
+                OnSave?.Invoke(blueprint);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
-        internal static void Invoke_OnLoad(CustomBlueprint blueprint)
+        internal void Invoke_OnLoad(CustomBlueprint blueprint)
         {
-            OnLoad?.Invoke(blueprint);
+            try
+            {
+                OnLoad?.Invoke(blueprint);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
-        internal static void Invoke_OnLaunch(CustomBlueprint blueprint, Rocket[] rockets, Part[] parts)
+        internal void Invoke_OnLaunch(CustomBlueprint blueprint, Rocket[] rockets, Part[] parts)
         {
-            OnLaunch?.Invoke(blueprint, rockets, parts);
+            try
+            {
+                OnLaunch?.Invoke(blueprint, rockets, parts);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
     }
 
@@ -107,7 +127,7 @@ namespace CustomSaveData
             static void Postfix(ref Blueprint __result)
             {
                 CustomBlueprint res = new CustomBlueprint(__result);
-                CustomBlueprintHelper.Invoke_OnSave(res);
+                Main.BlueprintHelper.Invoke_OnSave(res);
                 __result = res;
             }
         }
@@ -120,7 +140,6 @@ namespace CustomSaveData
                 if (path.FolderExists() && JsonWrapper.TryLoadJson(path.ExtendToFile("Blueprint.txt"), out CustomBlueprint customBlueprint))
                 {
                     blueprint = customBlueprint;
-                    CustomBlueprintHelper.Invoke_OnLoad(customBlueprint);
                     __result = true;
                 }
                 else
@@ -130,6 +149,15 @@ namespace CustomSaveData
                     __result = false;
                 }
                 return false;
+            }
+        }
+
+        [HarmonyPatch(typeof(BuildState), nameof(BuildState.LoadBlueprint))]
+        static class BuildState_LoadBlueprint
+        {
+            static void Postfix(Blueprint blueprint)
+            {
+                Main.BlueprintHelper.Invoke_OnLoad(blueprint as CustomBlueprint);
             }
         }
 
@@ -166,7 +194,7 @@ namespace CustomSaveData
                 Rocket rocket = rockets.FirstOrDefault((Rocket a) => a.hasControl.Value);
                 PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
 
-                CustomBlueprintHelper.Invoke_OnLaunch((CustomBlueprint) blueprint, rockets, parts);
+                Main.BlueprintHelper.Invoke_OnLaunch((CustomBlueprint) blueprint, rockets, parts);
                 return false;
             }
 

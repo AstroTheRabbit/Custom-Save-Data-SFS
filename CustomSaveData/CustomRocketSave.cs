@@ -76,26 +76,40 @@ namespace CustomSaveData
         }
     }
 
-    public static class CustomRocketSaveHelper
+    public class CustomRocketSaveHelper
     {
         /// <summary>
         /// Called when a <c>WorldSave</c> is created. Can be used to tranfer custom data from each <c>Rocket</c> to its respective <c>CustomRocketSave</c>.
         /// </summary>
-        public static event Action<CustomRocketSave, Rocket> OnSave;
+        public event Action<CustomRocketSave, Rocket> OnSave;
 
         /// <summary>
         /// Called when a <c>CustomRocketSave</c> is spawned into the world. Can be used to tranfer custom data from each <c>CustomRocketSave</c> to its respective <c>Rocket</c>.
         /// </summary>
-        public static event Action<CustomRocketSave, Rocket> OnLoad;
+        public event Action<CustomRocketSave, Rocket> OnLoad;
 
-        public static void Invoke_OnSave(CustomRocketSave rocketSave, Rocket rocket)
+        internal static void Invoke_OnSave(CustomRocketSave rocketSave, Rocket rocket)
         {
-            OnSave?.Invoke(rocketSave, rocket);
+            try
+            {
+                Main.RocketSaveHelper.OnSave?.Invoke(rocketSave, rocket);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
-        public static void Invoke_OnLoad(CustomRocketSave rocketSave, Rocket rocket)
+        internal static void Invoke_OnLoad(CustomRocketSave rocketSave, Rocket rocket)
         {
-            OnLoad?.Invoke(rocketSave, rocket);
+            try
+            {
+                Main.RocketSaveHelper.OnLoad?.Invoke(rocketSave, rocket);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
     }
 
