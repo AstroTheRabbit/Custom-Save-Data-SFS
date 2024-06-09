@@ -14,6 +14,7 @@ using SFS.Builds;
 using SFS.Parsers.Json;
 using SFS.Translations;
 using SFS.Parts.Modules;
+using System.Reflection.Emit;
 
 namespace CustomSaveData
 {
@@ -164,43 +165,34 @@ namespace CustomSaveData
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
         static class RocketManager_SpawnBlueprint
         {
-            static bool Prefix(Blueprint blueprint)
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                WorldView.main.SetViewLocation(Base.planetLoader.spaceCenter.LaunchPadLocation);
-                if (blueprint.rotation != 0f)
+                List<CodeInstruction> codes = instructions.ToList();
+                for (int i = 0; i < codes.Count; i++)
                 {
-                    PartSave[] partSaves = blueprint.parts;
-                    foreach (PartSave partSave in partSaves)
+                    if (codes[i].opcode == OpCodes.Ret)
                     {
-                        partSave.orientation += new Orientation(1f, 1f, blueprint.rotation);
-                        partSave.position *= new Orientation(1f, 1f, blueprint.rotation);
+                        codes.InsertRange
+                        (
+                            i,
+                            new CodeInstruction[]
+                            {
+                                // Load `Main.BlueprintHelper`.
+                                new CodeInstruction(OpCodes.Call, AccessTools.PropertyGetter(typeof(Main), nameof(Main.BlueprintHelper))),
+                                // Load `Blueprint`.
+                                new CodeInstruction(OpCodes.Ldarg_0),
+                                // Load `Rocket[]`.
+                                new CodeInstruction(OpCodes.Ldloc_3),
+                                // Load `Part[]`.
+                                new CodeInstruction(OpCodes.Ldloc_0),
+                                // Call  `CustomBlueprintHelper.Invoke_OnLaunch`.
+                                CodeInstruction.Call(typeof(CustomBlueprintHelper), nameof(CustomBlueprintHelper.Invoke_OnLaunch)),
+                            }
+                        );
+                        break;
                     }
                 }
-                Part[] parts = PartsLoader.CreateParts(blueprint.parts, null, null, OnPartNotOwned.Delete, out OwnershipState[] ownershipState);
-                Part[] successfulParts = parts.Where((Part a) => a == null).ToArray();
-                if (blueprint.rotation != 0f)
-                {
-                    PartSave[] partSaves = blueprint.parts;
-                    foreach (PartSave partSave in partSaves)
-                    {
-                        partSave.orientation += new Orientation(1f, 1f, 0f - blueprint.rotation);
-                        partSave.position *= new Orientation(1f, 1f, 0f - blueprint.rotation);
-                    }
-                }
-                Part_Utility.PositionParts(WorldView.ToLocalPosition(Base.planetLoader.spaceCenter.LaunchPadLocation.position), new Vector2(0.5f, 0f), round: true, useLaunchBounds: true, successfulParts);
-                new JointGroup(RocketManager.GenerateJoints(successfulParts), successfulParts.ToList()).RecreateGroups(out var newGroups);
-                Rocket[] rockets = RocketManager_SpawnRockets(newGroups);
-                Staging.CreateStages(blueprint.stages, parts);
-                Rocket rocket = rockets.FirstOrDefault((Rocket a) => a.hasControl.Value);
-                PlayerController.main.player.Value = rocket ?? ((rockets.Length != 0) ? rockets[0] : null);
-
-                Main.BlueprintHelper.Invoke_OnLaunch((CustomBlueprint) blueprint, rockets, parts);
-                return false;
-            }
-
-            static Rocket[] RocketManager_SpawnRockets(List<JointGroup> groups)
-            {
-                return (Rocket[]) typeof(RocketManager).GetMethod("SpawnRockets", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new[] { groups });
+                return codes;
             }
         }
     }

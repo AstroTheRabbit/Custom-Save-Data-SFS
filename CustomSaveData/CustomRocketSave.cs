@@ -118,29 +118,45 @@ namespace CustomSaveData
         [HarmonyPatch(typeof(WorldSave), nameof(WorldSave.TryLoad))]
         static class WorldSave_TryLoad
         {
-            static bool Prefix(FolderPath path, ref bool loadRocketsAndBranches, I_MsgLogger logger, ref WorldSave worldSave, ref bool __result)
+            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
             {
-                CustomRocketSave[] rocketSaves = null;
-                if (loadRocketsAndBranches && !JsonWrapper.TryLoadJson(path.ExtendToFile("Rockets.txt"), out rocketSaves))
+                List<CodeInstruction> codes = instructions.ToList();
+                for (int i = 0; i < codes.Count; i++)
                 {
-                    logger.Log(Loc.main.Load_Failed.InjectField(Loc.main.Quicksave, "filetype").Inject(path, "filepath"));
-                    worldSave = null;
-                    __result = false;
+                    if (codes[i].opcode == OpCodes.Ldstr && (string) codes[i].operand == "Rockets.txt")
+                    {
+                        codes[i + 3].operand = typeof(JsonWrapper)
+                            .GetMethod(nameof(JsonWrapper.TryLoadJson), BindingFlags.Public | BindingFlags.Static)
+                            .MakeGenericMethod(typeof(CustomRocketSave[]));
+                        break;
+                    }
                 }
-                else
-                {
-                    string version = JsonWrapper.TryLoadJson(path.ExtendToFile("Version.txt"), out string out_version) ? out_version : Application.version;
-                    WorldState worldState = JsonWrapper.TryLoadJson(path.ExtendToFile("WorldState.txt"), out WorldState out_worldState) ? out_worldState : WorldState.StartState();
-                    Dictionary<int, Branch> branches = (!loadRocketsAndBranches) ? null : (JsonWrapper.TryLoadJson(path.ExtendToFile("Branches.txt"), out Dictionary<int, Branch> out_branches) ? out_branches : new Dictionary<int, Branch>());
-                    CareerState careerState = JsonWrapper.TryLoadJson(path.ExtendToFile("CareerState.txt"), out CareerState out_careerState) ? out_careerState : new CareerState();
-                    Astronauts astronauts = JsonWrapper.TryLoadJson(path.ExtendToFile("Astronauts.txt"), out Astronauts out_astronauts) ? out_astronauts : new Astronauts();
-                    HashSet<LogId> achievements = JsonWrapper.TryLoadJson(path.ExtendToFile("Achievements.txt"), out List<LogId> out_achievements) ? out_achievements.ToHashSet() : new HashSet<LogId>();
-                    HashSet<string> challenges = JsonWrapper.TryLoadJson(path.ExtendToFile("Challenges.txt"), out List<string> out_challenges) ? out_challenges.ToHashSet() : new HashSet<string>();
-                    worldSave = new WorldSave(version, careerState, astronauts, worldState, rocketSaves, branches, achievements, challenges);
-                    __result = true;
-                }
-                return false;
+                return codes;
             }
+
+            // static bool Prefix(FolderPath path, ref bool loadRocketsAndBranches, I_MsgLogger logger, ref WorldSave worldSave, ref bool __result)
+            // {
+            //     CustomRocketSave[] rocketSaves = null;
+            //     if (loadRocketsAndBranches && !JsonWrapper.TryLoadJson(path.ExtendToFile("Rockets.txt"), out rocketSaves))
+            //     {
+            //         logger.Log(Loc.main.Load_Failed.InjectField(Loc.main.Quicksave, "filetype").Inject(path, "filepath"));
+            //         worldSave = null;
+            //         __result = false;
+            //     }
+            //     else
+            //     {
+            //         string version = JsonWrapper.TryLoadJson(path.ExtendToFile("Version.txt"), out string out_version) ? out_version : Application.version;
+            //         WorldState worldState = JsonWrapper.TryLoadJson(path.ExtendToFile("WorldState.txt"), out WorldState out_worldState) ? out_worldState : WorldState.StartState();
+            //         Dictionary<int, Branch> branches = (!loadRocketsAndBranches) ? null : (JsonWrapper.TryLoadJson(path.ExtendToFile("Branches.txt"), out Dictionary<int, Branch> out_branches) ? out_branches : new Dictionary<int, Branch>());
+            //         CareerState careerState = JsonWrapper.TryLoadJson(path.ExtendToFile("CareerState.txt"), out CareerState out_careerState) ? out_careerState : new CareerState();
+            //         Astronauts astronauts = JsonWrapper.TryLoadJson(path.ExtendToFile("Astronauts.txt"), out Astronauts out_astronauts) ? out_astronauts : new Astronauts();
+            //         HashSet<LogId> achievements = JsonWrapper.TryLoadJson(path.ExtendToFile("Achievements.txt"), out List<LogId> out_achievements) ? out_achievements.ToHashSet() : new HashSet<LogId>();
+            //         HashSet<string> challenges = JsonWrapper.TryLoadJson(path.ExtendToFile("Challenges.txt"), out List<string> out_challenges) ? out_challenges.ToHashSet() : new HashSet<string>();
+            //         worldSave = new WorldSave(version, careerState, astronauts, worldState, rocketSaves, branches, achievements, challenges);
+            //         __result = true;
+            //     }
+            //     return false;
+            // }
         }
 
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.LoadRocket))]
