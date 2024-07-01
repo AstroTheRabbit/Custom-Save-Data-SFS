@@ -186,7 +186,7 @@ namespace CustomSaveData
                                 // Load `Part[]`.
                                 new CodeInstruction(OpCodes.Ldloc_0),
                                 // Call  `CustomBlueprintHelper.Invoke_OnLaunch`.
-                                CodeInstruction.Call(typeof(CustomBlueprintHelper), nameof(CustomBlueprintHelper.Invoke_OnLaunch)),
+                                new CodeInstruction(OpCodes.Callvirt, AccessTools.Method(typeof(CustomBlueprintHelper), nameof(CustomBlueprintHelper.Invoke_OnLaunch))),
                             }
                         );
                         break;

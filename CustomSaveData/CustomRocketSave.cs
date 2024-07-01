@@ -6,24 +6,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
 using Newtonsoft.Json;
-using SFS;
-using SFS.IO;
-using SFS.Logs;
 using SFS.Stats;
 using SFS.World;
-using SFS.Parts;
-using SFS.WorldBase;
-using SFS.Utilities;
-using SFS.World.Maps;
-using SFS.Translations;
 using SFS.Parsers.Json;
-using SFS.Parts.Modules;
-using static SFS.World.WorldSave;
 
 namespace CustomSaveData
 {
     [Serializable]
-    [JsonConverter(typeof(LocationData.LocationConverter))]
+    [JsonConverter(typeof(WorldSave.LocationData.LocationConverter))]
     public class CustomRocketSave : RocketSave
     {
         /// <summary>
@@ -35,21 +25,7 @@ namespace CustomSaveData
         [JsonConstructor]
         public CustomRocketSave() : base() { }
 
-        public CustomRocketSave(RocketSave rocketSave)
-        {
-            rocketName = rocketSave.rocketName;
-            location = rocketSave.location;
-            rotation = rocketSave.rotation;
-            angularVelocity = rocketSave.angularVelocity;
-            throttleOn = rocketSave.throttleOn;
-            throttlePercent = rocketSave.throttlePercent;
-            RCS = rocketSave.RCS;
-            parts = rocketSave.parts;
-            joints = rocketSave.joints;
-            stages = rocketSave.stages;
-            staging_EditMode = rocketSave.staging_EditMode;
-            branch = rocketSave.branch;
-        }
+        public CustomRocketSave(Rocket rocket) : base(rocket) { }
 
         public void AddCustomData(string id, object data)
         {
@@ -88,11 +64,11 @@ namespace CustomSaveData
         /// </summary>
         public event Action<CustomRocketSave, Rocket> OnLoad;
 
-        internal static void Invoke_OnSave(CustomRocketSave rocketSave, Rocket rocket)
+        internal void Invoke_OnSave(CustomRocketSave rocketSave, Rocket rocket)
         {
             try
             {
-                Main.RocketSaveHelper.OnSave?.Invoke(rocketSave, rocket);
+                OnSave?.Invoke(rocketSave, rocket);
             }
             catch (Exception e)
             {
@@ -100,11 +76,11 @@ namespace CustomSaveData
             }
         }
 
-        internal static void Invoke_OnLoad(CustomRocketSave rocketSave, Rocket rocket)
+        internal void Invoke_OnLoad(CustomRocketSave rocketSave, Rocket rocket)
         {
             try
             {
-                Main.RocketSaveHelper.OnLoad?.Invoke(rocketSave, rocket);
+                OnLoad?.Invoke(rocketSave, rocket);
             }
             catch (Exception e)
             {
@@ -125,6 +101,7 @@ namespace CustomSaveData
                 {
                     if (codes[i].opcode == OpCodes.Ldstr && (string) codes[i].operand == "Rockets.txt")
                     {
+                        // * Changes `TryLoadJson<RocketSave[]>` to `TryLoadJson<CustomRocketSave[]>`.
                         codes[i + 3].operand = typeof(JsonWrapper)
                             .GetMethod(nameof(JsonWrapper.TryLoadJson), BindingFlags.Public | BindingFlags.Static)
                             .MakeGenericMethod(typeof(CustomRocketSave[]));
@@ -133,136 +110,57 @@ namespace CustomSaveData
                 }
                 return codes;
             }
-
-            // static bool Prefix(FolderPath path, ref bool loadRocketsAndBranches, I_MsgLogger logger, ref WorldSave worldSave, ref bool __result)
-            // {
-            //     CustomRocketSave[] rocketSaves = null;
-            //     if (loadRocketsAndBranches && !JsonWrapper.TryLoadJson(path.ExtendToFile("Rockets.txt"), out rocketSaves))
-            //     {
-            //         logger.Log(Loc.main.Load_Failed.InjectField(Loc.main.Quicksave, "filetype").Inject(path, "filepath"));
-            //         worldSave = null;
-            //         __result = false;
-            //     }
-            //     else
-            //     {
-            //         string version = JsonWrapper.TryLoadJson(path.ExtendToFile("Version.txt"), out string out_version) ? out_version : Application.version;
-            //         WorldState worldState = JsonWrapper.TryLoadJson(path.ExtendToFile("WorldState.txt"), out WorldState out_worldState) ? out_worldState : WorldState.StartState();
-            //         Dictionary<int, Branch> branches = (!loadRocketsAndBranches) ? null : (JsonWrapper.TryLoadJson(path.ExtendToFile("Branches.txt"), out Dictionary<int, Branch> out_branches) ? out_branches : new Dictionary<int, Branch>());
-            //         CareerState careerState = JsonWrapper.TryLoadJson(path.ExtendToFile("CareerState.txt"), out CareerState out_careerState) ? out_careerState : new CareerState();
-            //         Astronauts astronauts = JsonWrapper.TryLoadJson(path.ExtendToFile("Astronauts.txt"), out Astronauts out_astronauts) ? out_astronauts : new Astronauts();
-            //         HashSet<LogId> achievements = JsonWrapper.TryLoadJson(path.ExtendToFile("Achievements.txt"), out List<LogId> out_achievements) ? out_achievements.ToHashSet() : new HashSet<LogId>();
-            //         HashSet<string> challenges = JsonWrapper.TryLoadJson(path.ExtendToFile("Challenges.txt"), out List<string> out_challenges) ? out_challenges.ToHashSet() : new HashSet<string>();
-            //         worldSave = new WorldSave(version, careerState, astronauts, worldState, rocketSaves, branches, achievements, challenges);
-            //         __result = true;
-            //     }
-            //     return false;
-            // }
         }
 
         [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.LoadRocket))]
         static class RocketManager_LoadRocket
         {
-            static bool Prefix(RocketSave rocketSave, ref bool hasNonOwnedParts)
-            {
-                hasNonOwnedParts = false;
-                if (rocketSave.location.address.HasPlanet())
-                {
-                    Part[] parts = PartsLoader.CreateParts(rocketSave.parts, null, null, OnPartNotOwned.UsePlaceholder, out OwnershipState[] ownershipState);
-                    hasNonOwnedParts = ownershipState.Any((OwnershipState a) => a != OwnershipState.OwnedAndUnlocked);
-                    Rocket rocket = RocketManager_CreateRocket
-                    (
-                        new JointGroup
-                        (
-                            rocketSave.joints.Select((JointSave a) => new PartJoint(parts[a.partIndex_A],
-                            parts[a.partIndex_B],
-                            parts[a.partIndex_B].Position - parts[a.partIndex_A].Position)).ToList(),
-                            parts.ToList()
-                        ),
-                        rocketSave.rocketName,
-                        rocketSave.throttleOn,
-                        rocketSave.throttlePercent,
-                        rocketSave.RCS,
-                        rocketSave.rotation,
-                        rocketSave.angularVelocity,
-                        (Rocket a) => rocketSave.location.GetSaveLocation(WorldTime.main.worldTime),
-                        false
-                    );
-                    rocket.staging.Load(rocketSave.stages, rocket.partHolder.GetArray(), record: false);
-                    rocket.staging.editMode.Value = rocketSave.staging_EditMode;
-                    rocket.stats.Load(rocketSave.branch);
-
-                    CustomRocketSaveHelper.Invoke_OnLoad((CustomRocketSave) rocketSave, rocket);
-                }
-                return false;
-            }
-
-            static Rocket RocketManager_CreateRocket(JointGroup jointGroup, string rocketName, bool throttleOn, float throttlePercent, bool RCS, float rotation, float angularVelocity, Func<Rocket, Location> location, bool physicsMode)
-            {
-                return (Rocket) typeof(RocketManager).GetMethod("CreateRocket", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, new object[] { jointGroup, rocketName, throttleOn, throttlePercent, RCS, rotation, angularVelocity, location, physicsMode });
-            }
-        }
-
-        [HarmonyPatch(typeof(GameManager), "CreateWorldSave")]
-        static class GameManager_CreateWorldSave
-        {
-            static bool Prefix(GameManager __instance, ref WorldSave __result)
-            {
-                MapView.View view = Map.view.view;
-	            __result = new WorldSave
-                (
-                    Application.version,
-                    SFS.Career.CareerState.main.state,
-                    SFS.Career.AstronautState.main.GetAstronautSave_Game(),
-                    new WorldState
-                    (
-                        WorldTime.main.worldTime,
-                        WorldTime.main.timewarpIndex,
-                        Map.manager.mapMode.Value,
-                        new Double3(view.position.Value.x, view.position.Value.y, view.distance),
-                        WorldAddress.GetMapAddress(view.target),
-                        WorldAddress.GetMapAddress(Map.navigation.target),
-                        WorldAddress.GetPlayerAddress(PlayerController.main.player.Value),
-                        PlayerController.main.cameraDistance
-                    ),
-                    __instance.rockets.Select((Rocket rocket) =>
-                    {
-                        CustomRocketSave rocketSave = new CustomRocketSave(new RocketSave(rocket));
-                        CustomRocketSaveHelper.Invoke_OnSave(rocketSave, rocket);
-                        return rocketSave;
-                        
-                    }).ToArray(),
-                    LogManager.main.branches,
-                    LogManager.main.completeLogs,
-                    LogManager.main.completeChallenges
-                );
-                return false;
-            }
-        }
-
-        [HarmonyPatch(typeof(WorldSave), nameof(WorldSave.Save))]
-        static class WorldSave_Save
-        {
-            static void Postfix(FolderPath path, bool saveRocketsAndBranches, WorldSave worldSave)
-            {
-                if (saveRocketsAndBranches)
-                {
-                    CustomRocketSave[] rockets = (CustomRocketSave[]) worldSave.rockets;
-                    JsonWrapper.SaveAsJson(path.ExtendToFile("Rockets.txt"), rockets, false);
-                }
-            }
-
             static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
                 List<CodeInstruction> codes = instructions.ToList();
                 for (int i = 0; i < codes.Count; i++)
                 {
-                    if (codes[i].opcode == OpCodes.Ldstr && ((string) codes[i].operand) == "Rockets.txt")
+                    if (codes[i].Calls(typeof(StatsRecorder).GetMethod(nameof(StatsRecorder.Load))))
                     {
-                        codes.RemoveRange(i - 1, 7);
+                        // * Inserts `Main.RocketSaveHelper.Invoke_OnLoad`.
+                        codes.InsertRange
+                        (
+                            i + 1,
+                            new CodeInstruction[]
+                            {
+                                // Load `Main.RocketSaveHelper`.
+                                new CodeInstruction(OpCodes.Call, AccessTools.PropertyGetter(typeof(Main), nameof(Main.RocketSaveHelper))),
+                                // Load `RocketSave`.
+                                new CodeInstruction(OpCodes.Ldarg_0),
+                                // Load `Rocket`.
+                                new CodeInstruction(OpCodes.Ldloc_2),
+                                // Call `CustomRocketSaveHelper.Invoke_OnLoad`.
+                                CodeInstruction.Call(typeof(CustomRocketSaveHelper), nameof(CustomRocketSaveHelper.Invoke_OnLoad)),
+                            }
+                        );
                         break;
                     }
                 }
                 return codes;
+            }
+        }
+
+        [HarmonyPatch]
+        static class GameManager_CreateWorldSave
+        {
+            static MethodBase TargetMethod()
+            {
+                // ? Patching a compiler-generated method: https://github.com/pardeike/Harmony/issues/536
+                Type type = AccessTools.FirstInner(typeof(GameManager), (Type t) => t.Name == "<>c");
+                return AccessTools.FirstMethod(type, (MethodInfo m) => m.Name.Contains("b__24_0"));
+            }
+
+            static bool Prefix(Rocket rocket, ref RocketSave __result)
+            {
+                CustomRocketSave save = new CustomRocketSave(rocket);
+                Main.RocketSaveHelper.Invoke_OnSave(save, rocket);
+                __result = save;
+                return true;
             }
         }
     }
