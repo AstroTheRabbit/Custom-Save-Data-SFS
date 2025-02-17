@@ -1,11 +1,10 @@
 using System;
 using System.Linq;
-using System.Reflection;
+using System.Reflection.Emit;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using SFS;
 using SFS.IO;
 using SFS.World;
@@ -13,8 +12,6 @@ using SFS.Parts;
 using SFS.Builds;
 using SFS.Parsers.Json;
 using SFS.Translations;
-using SFS.Parts.Modules;
-using System.Reflection.Emit;
 
 namespace CustomSaveData
 {
@@ -25,8 +22,8 @@ namespace CustomSaveData
         /// <summary>
         /// The custom data of a <c>CustomBlueprint</c>. Do not access directly; use <c>CustomBlueprint.AddCustomData</c> and <c>CustomBlueprint.GetCustomData</c> instead.
         /// </summary>
-        [JsonProperty]
-        public Dictionary<string, JToken> customData = new Dictionary<string, JToken>();
+        [JsonProperty(Order = 1)]
+        public Dictionary<string, object> customData = new Dictionary<string, object>();
 
         [JsonConstructor]
         public CustomBlueprint() : base() { }
@@ -43,7 +40,7 @@ namespace CustomSaveData
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, JToken.FromObject(data));
+            customData.Add(id, data);
         }
 
         public void RemoveCustomData(string id)
@@ -51,18 +48,18 @@ namespace CustomSaveData
             customData.Remove(id);
         }
 
-        public D GetCustomData<D>(string id, out bool successful)
+        public bool GetCustomData<D>(string id, out D data)
         {
-            successful = false;
-            if (customData.TryGetValue(id, out JToken data))
+            if (customData.TryGetValue(id, out object retrievedData))
             {
-                if (data.ToObject<D>() is D typedData)
+                if (retrievedData is D typedData)
                 {
-                    successful = true;
-                    return typedData;
+                    data = typedData;
+                    return true;
                 }
             }
-            return default;
+            data = default;
+            return false;
         }
     }
 
@@ -158,6 +155,12 @@ namespace CustomSaveData
         {
             static void Postfix(Blueprint blueprint)
             {
+                CustomBlueprint bp = blueprint as CustomBlueprint;
+                Debug.Log(bp.customData.Count);
+                foreach (string key in bp.customData.Keys)
+                {
+                    Debug.Log(key);
+                }
                 Main.BlueprintHelper.Invoke_OnLoad(blueprint as CustomBlueprint);
             }
         }

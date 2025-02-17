@@ -19,7 +19,7 @@ namespace CustomSaveData
         /// <summary>
         /// The custom data of a <c>CustomRocketSave</c>. Do not access directly; use <c>CustomRocketSave.AddCustomData</c> and <c>CustomRocketSave.GetCustomData</c> instead.
         /// </summary>
-        [JsonProperty]
+        [JsonProperty(Order = 1)]
         public Dictionary<string, object> customData = new Dictionary<string, object>();
 
         [JsonConstructor]
@@ -37,18 +37,18 @@ namespace CustomSaveData
             customData.Remove(id);
         }
 
-        public D GetCustomData<D>(string id, out bool successful)
+        public bool GetCustomData<D>(string id, out D data)
         {
-            successful = false;
-            if (customData.TryGetValue(id, out object data))
+            if (customData.TryGetValue(id, out object retrievedData))
             {
-                if (data is D typedData)
+                if (retrievedData is D typedData)
                 {
-                    successful = true;
-                    return typedData;
+                    data = typedData;
+                    return true;
                 }
             }
-            return default;
+            data = default;
+            return false;
         }
     }
 
@@ -150,9 +150,10 @@ namespace CustomSaveData
         {
             static MethodBase TargetMethod()
             {
+                // * This patch is specifically targetting `(Rocket rocket) => new RocketSave(rocket)` of `GameManager.CreateWorldSave`.
                 // ? Patching a compiler-generated method: https://github.com/pardeike/Harmony/issues/536
-                Type type = AccessTools.FirstInner(typeof(GameManager), (Type t) => t.Name == "<>c");
-                return AccessTools.FirstMethod(type, (MethodInfo m) => m.Name.Contains("b__24_0"));
+                Type type = AccessTools.FirstInner(typeof(GameManager), t => t.Name == "<>c");
+                return AccessTools.FirstMethod(type, m => m.Name.Contains("b__24_0"));
             }
 
             static bool Prefix(Rocket rocket, ref RocketSave __result)
@@ -160,7 +161,7 @@ namespace CustomSaveData
                 CustomRocketSave save = new CustomRocketSave(rocket);
                 Main.RocketSaveHelper.Invoke_OnSave(save, rocket);
                 __result = save;
-                return true;
+                return false;
             }
         }
     }
