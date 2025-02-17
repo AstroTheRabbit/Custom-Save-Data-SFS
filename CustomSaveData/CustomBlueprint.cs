@@ -2,31 +2,31 @@ using System;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Collections.Generic;
-using UnityEngine;
-using HarmonyLib;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using HarmonyLib;
+using UnityEngine;
 using SFS;
 using SFS.IO;
 using SFS.World;
 using SFS.Parts;
 using SFS.Builds;
-using SFS.Parsers.Json;
 using SFS.Translations;
+using SFS.Parsers.Json;
 
 namespace CustomSaveData
 {
     [Serializable]
     public class CustomBlueprint : Blueprint
     {
-        static CustomBlueprint() {}
         /// <summary>
         /// The custom data of a <c>CustomBlueprint</c>. Do not access directly; use <c>CustomBlueprint.AddCustomData</c> and <c>CustomBlueprint.GetCustomData</c> instead.
         /// </summary>
         [JsonProperty(Order = 1)]
-        public Dictionary<string, object> customData = new Dictionary<string, object>();
+        internal Dictionary<string, JToken> customData = new Dictionary<string, JToken>();
 
         [JsonConstructor]
-        public CustomBlueprint() : base() { }
+        public CustomBlueprint() : base() {}
 
         public CustomBlueprint(Blueprint blueprint)
         {
@@ -40,7 +40,7 @@ namespace CustomSaveData
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, data);
+            customData.Add(id, JToken.FromObject(data));
         }
 
         public void RemoveCustomData(string id)
@@ -50,9 +50,9 @@ namespace CustomSaveData
 
         public bool GetCustomData<D>(string id, out D data)
         {
-            if (customData.TryGetValue(id, out object retrievedData))
+            if (customData.TryGetValue(id, out JToken token))
             {
-                if (retrievedData is D typedData)
+                if (token.ToObject<D>() is D typedData)
                 {
                     data = typedData;
                     return true;
@@ -155,12 +155,6 @@ namespace CustomSaveData
         {
             static void Postfix(Blueprint blueprint)
             {
-                CustomBlueprint bp = blueprint as CustomBlueprint;
-                Debug.Log(bp.customData.Count);
-                foreach (string key in bp.customData.Keys)
-                {
-                    Debug.Log(key);
-                }
                 Main.BlueprintHelper.Invoke_OnLoad(blueprint as CustomBlueprint);
             }
         }

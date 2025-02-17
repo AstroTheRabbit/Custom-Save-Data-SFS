@@ -3,9 +3,11 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Collections.Generic;
-using UnityEngine;
-using HarmonyLib;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using HarmonyLib;
+using UnityEngine;
+using SFS.IO;
 using SFS.Stats;
 using SFS.World;
 using SFS.Parsers.Json;
@@ -13,23 +15,40 @@ using SFS.Parsers.Json;
 namespace CustomSaveData
 {
     [Serializable]
-    [JsonConverter(typeof(WorldSave.LocationData.LocationConverter))]
+    // ? For some reason the `JsonConverter` attribute below, which is applied to the `RocketSave` base class,
+    // ? messes with the JSON serializer in such a way that I have to make the `customData` field public
+    // ? (the `[JsonProperty(Order = 1)]` attribute seemingly no longer has any effect?).
+    // [JsonConverter(typeof(WorldSave.LocationData.LocationConverter))]
     public class CustomRocketSave : RocketSave
     {
         /// <summary>
         /// The custom data of a <c>CustomRocketSave</c>. Do not access directly; use <c>CustomRocketSave.AddCustomData</c> and <c>CustomRocketSave.GetCustomData</c> instead.
         /// </summary>
         [JsonProperty(Order = 1)]
-        public Dictionary<string, object> customData = new Dictionary<string, object>();
+        public Dictionary<string, JToken> customData = new Dictionary<string, JToken>();
 
         [JsonConstructor]
-        public CustomRocketSave() : base() { }
+        public CustomRocketSave() : base() {}
 
-        public CustomRocketSave(Rocket rocket) : base(rocket) { }
+        public CustomRocketSave(RocketSave save)
+        {
+            rocketName = save.rocketName;
+            location = save.location;
+            rotation = save.rotation;
+            angularVelocity = save.angularVelocity;
+            throttleOn = save.throttleOn;
+            throttlePercent = save.throttlePercent;
+            RCS = save.RCS;
+            parts = save.parts;
+            joints = save.joints;
+            stages = save.stages;
+            staging_EditMode = save.staging_EditMode;
+            branch = save.branch;
+        }
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, data);
+            customData.Add(id, JToken.FromObject(data));
         }
 
         public void RemoveCustomData(string id)
@@ -39,9 +58,10 @@ namespace CustomSaveData
 
         public bool GetCustomData<D>(string id, out D data)
         {
-            if (customData.TryGetValue(id, out object retrievedData))
+            if (customData.TryGetValue(id, out JToken token))
             {
-                if (retrievedData is D typedData)
+                
+                if (token.ToObject<D>() is D typedData)
                 {
                     data = typedData;
                     return true;
@@ -156,12 +176,11 @@ namespace CustomSaveData
                 return AccessTools.FirstMethod(type, m => m.Name.Contains("b__24_0"));
             }
 
-            static bool Prefix(Rocket rocket, ref RocketSave __result)
+            static void Postfix(Rocket rocket, ref RocketSave __result)
             {
-                CustomRocketSave save = new CustomRocketSave(rocket);
+                CustomRocketSave save = new CustomRocketSave(__result);
                 Main.RocketSaveHelper.Invoke_OnSave(save, rocket);
                 __result = save;
-                return false;
             }
         }
     }

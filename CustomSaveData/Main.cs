@@ -1,12 +1,12 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using HarmonyLib;
-// ! using UITools;
+using UITools;
+using SFS.IO;
 using ModLoader;
 
 namespace CustomSaveData
 {
-    public class Main : Mod // ! , IUpdatable
+    public class Main : Mod , IUpdatable
     {
         public static Main main;
         public override string ModNameID => "customsavedata";
@@ -17,7 +17,7 @@ namespace CustomSaveData
         public override string Description => "A helper mod for saving and loading custom data to blueprints and rockets.";
         
         public override Dictionary<string, string> Dependencies { get; } = new Dictionary<string, string> { { "UITools", "1.1.1" } };
-        // ! public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>() ;// { { "https://github.com/AstroTheRabbit/Custom-Save-Data-SFS/releases/latest/download/CustomSaveData.dll", new FolderPath(ModFolder).ExtendToFile("CustomSaveData.dll") } };
+        public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>() { { "https://github.com/AstroTheRabbit/Custom-Save-Data-SFS/releases/latest/download/CustomSaveData.dll", new FolderPath(ModFolder).ExtendToFile("CustomSaveData.dll") } };
         
         CustomBlueprintHelper blueprintHelper;
         public static CustomBlueprintHelper BlueprintHelper
