@@ -16,7 +16,7 @@ namespace CustomSaveData
         public override string ModVersion => "1.0";
         public override string Description => "A helper mod for saving and loading custom data to blueprints and rockets.";
         
-        public override Dictionary<string, string> Dependencies { get; } = new Dictionary<string, string> { { "UITools", "1.1.1" } };
+        public override Dictionary<string, string> Dependencies { get; } = new Dictionary<string, string> { { "UITools", "1.1.5" } };
         public Dictionary<string, FilePath> UpdatableFiles => new Dictionary<string, FilePath>() { { "https://github.com/AstroTheRabbit/Custom-Save-Data-SFS/releases/latest/download/CustomSaveData.dll", new FolderPath(ModFolder).ExtendToFile("CustomSaveData.dll") } };
         
         CustomBlueprintHelper blueprintHelper;
