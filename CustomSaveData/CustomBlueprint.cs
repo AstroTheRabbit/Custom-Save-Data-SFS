@@ -1,18 +1,11 @@
 using System;
-using System.Linq;
-using System.Reflection.Emit;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using HarmonyLib;
 using UnityEngine;
-using SFS;
-using SFS.IO;
 using SFS.World;
 using SFS.Parts;
 using SFS.Builds;
-using SFS.Translations;
-using SFS.Parsers.Json;
 
 namespace CustomSaveData
 {
@@ -40,7 +33,7 @@ namespace CustomSaveData
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, JToken.FromObject(data));
+            customData.Add(id, JToken.FromObject(data, Main.jsonSerializer));
         }
 
         public void RemoveCustomData(string id)
@@ -113,83 +106,6 @@ namespace CustomSaveData
             catch (Exception e)
             {
                 Debug.LogException(e);
-            }
-        }
-    }
-
-    namespace Patches
-    {
-        [HarmonyPatch(typeof(BuildState), nameof(BuildState.GetBlueprint))]
-        static class BuildState_GetBlueprint
-        {
-            static void Postfix(ref Blueprint __result)
-            {
-                CustomBlueprint res = new CustomBlueprint(__result);
-                Main.BlueprintHelper.Invoke_OnSave(res);
-                __result = res;
-            }
-        }
-
-        [HarmonyPatch(typeof(Blueprint), nameof(Blueprint.TryLoad))]
-        static class Blueprint_TryLoad
-        {
-            static bool Prefix(FolderPath path, I_MsgLogger errorLogger, ref Blueprint blueprint, out bool __result)
-            {
-                if (path.FolderExists() && JsonWrapper.TryLoadJson(path.ExtendToFile("Blueprint.txt"), out CustomBlueprint customBlueprint))
-                {
-                    blueprint = customBlueprint;
-                    __result = true;
-                }
-                else
-                {
-                    errorLogger.Log(Loc.main.Load_Failed.InjectField(Loc.main.Blueprint, "filetype").Inject(path, "filepath"));
-                    blueprint = null;
-                    __result = false;
-                }
-                return false;
-            }
-        }
-
-        [HarmonyPatch(typeof(BuildState), nameof(BuildState.LoadBlueprint))]
-        static class BuildState_LoadBlueprint
-        {
-            static void Postfix(Blueprint blueprint)
-            {
-                Main.BlueprintHelper.Invoke_OnLoad(blueprint as CustomBlueprint);
-            }
-        }
-
-        [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.SpawnBlueprint))]
-        static class RocketManager_SpawnBlueprint
-        {
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-            {
-                List<CodeInstruction> codes = instructions.ToList();
-                for (int i = 0; i < codes.Count; i++)
-                {
-                    if (codes[i].opcode == OpCodes.Ret)
-                    {
-                        codes.InsertRange
-                        (
-                            i,
-                            new CodeInstruction[]
-                            {
-                                // Load `Main.BlueprintHelper`.
-                                new CodeInstruction(OpCodes.Call, AccessTools.PropertyGetter(typeof(Main), nameof(Main.BlueprintHelper))),
-                                // Load `Blueprint`.
-                                new CodeInstruction(OpCodes.Ldarg_0),
-                                // Load `Rocket[]`.
-                                new CodeInstruction(OpCodes.Ldloc_3),
-                                // Load `Part[]`.
-                                new CodeInstruction(OpCodes.Ldloc_0),
-                                // Call  `CustomBlueprintHelper.Invoke_OnLaunch`.
-                                new CodeInstruction(OpCodes.Callvirt, AccessTools.Method(typeof(CustomBlueprintHelper), nameof(CustomBlueprintHelper.Invoke_OnLaunch))),
-                            }
-                        );
-                        break;
-                    }
-                }
-                return codes;
             }
         }
     }

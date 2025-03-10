@@ -1,24 +1,20 @@
 using System;
-using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using HarmonyLib;
 using UnityEngine;
-using SFS.IO;
-using SFS.Stats;
 using SFS.World;
-using SFS.Parsers.Json;
 
 namespace CustomSaveData
 {
-    [Serializable]
     // ? For some reason the `JsonConverter` attribute below, which is applied to the `RocketSave` base class,
-    // ? messes with the JSON serializer in such a way that I have to make the `customData` field public
-    // ? (the `[JsonProperty(Order = 1)]` attribute seemingly no longer has any effect?).
+    // ? messes with the JSON serializer in such a way that I have to make the `customData` field public.
+    // ? (also the `[JsonProperty(Order = 1)]` attribute seemingly no longer has any effect?).
     // [JsonConverter(typeof(WorldSave.LocationData.LocationConverter))]
+    // * Regarding ^^^, the problem arises from the fact that the converter seemingly applies itself "recursively" to every
+    // * field under the `JsonConverter` attribute. (I'm assuming that it was intended to only be applied to `LocationData`)
+    // * and functions by only serializing public fields in the order given by `Type.GetFields()`.
+    [Serializable]
     public class CustomRocketSave : RocketSave
     {
         /// <summary>
@@ -48,7 +44,7 @@ namespace CustomSaveData
 
         public void AddCustomData(string id, object data)
         {
-            customData.Add(id, JToken.FromObject(data));
+            customData.Add(id, JToken.FromObject(data, Main.jsonSerializer));
         }
 
         public void RemoveCustomData(string id)
@@ -105,82 +101,6 @@ namespace CustomSaveData
             catch (Exception e)
             {
                 Debug.LogException(e);
-            }
-        }
-    }
-
-    namespace Patches
-    {
-        [HarmonyPatch(typeof(WorldSave), nameof(WorldSave.TryLoad))]
-        static class WorldSave_TryLoad
-        {
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator generator)
-            {
-                List<CodeInstruction> codes = instructions.ToList();
-                for (int i = 0; i < codes.Count; i++)
-                {
-                    if (codes[i].opcode == OpCodes.Ldstr && (string) codes[i].operand == "Rockets.txt")
-                    {
-                        // * Changes `TryLoadJson<RocketSave[]>` to `TryLoadJson<CustomRocketSave[]>`.
-                        codes[i + 3].operand = typeof(JsonWrapper)
-                            .GetMethod(nameof(JsonWrapper.TryLoadJson), BindingFlags.Public | BindingFlags.Static)
-                            .MakeGenericMethod(typeof(CustomRocketSave[]));
-                        break;
-                    }
-                }
-                return codes;
-            }
-        }
-
-        [HarmonyPatch(typeof(RocketManager), nameof(RocketManager.LoadRocket))]
-        static class RocketManager_LoadRocket
-        {
-            static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-            {
-                List<CodeInstruction> codes = instructions.ToList();
-                for (int i = 0; i < codes.Count; i++)
-                {
-                    if (codes[i].Calls(typeof(StatsRecorder).GetMethod(nameof(StatsRecorder.Load))))
-                    {
-                        // * Inserts `Main.RocketSaveHelper.Invoke_OnLoad`.
-                        codes.InsertRange
-                        (
-                            i + 1,
-                            new CodeInstruction[]
-                            {
-                                // Load `Main.RocketSaveHelper`.
-                                new CodeInstruction(OpCodes.Call, AccessTools.PropertyGetter(typeof(Main), nameof(Main.RocketSaveHelper))),
-                                // Load `RocketSave`.
-                                new CodeInstruction(OpCodes.Ldarg_0),
-                                // Load `Rocket`.
-                                new CodeInstruction(OpCodes.Ldloc_2),
-                                // Call `CustomRocketSaveHelper.Invoke_OnLoad`.
-                                CodeInstruction.Call(typeof(CustomRocketSaveHelper), nameof(CustomRocketSaveHelper.Invoke_OnLoad)),
-                            }
-                        );
-                        break;
-                    }
-                }
-                return codes;
-            }
-        }
-
-        [HarmonyPatch]
-        static class GameManager_CreateWorldSave
-        {
-            static MethodBase TargetMethod()
-            {
-                // * This patch is specifically targetting `(Rocket rocket) => new RocketSave(rocket)` of `GameManager.CreateWorldSave`.
-                // ? Patching a compiler-generated method: https://github.com/pardeike/Harmony/issues/536
-                Type type = AccessTools.FirstInner(typeof(GameManager), t => t.Name == "<>c");
-                return AccessTools.FirstMethod(type, m => m.Name.Contains("b__24_0"));
-            }
-
-            static void Postfix(Rocket rocket, ref RocketSave __result)
-            {
-                CustomRocketSave save = new CustomRocketSave(__result);
-                Main.RocketSaveHelper.Invoke_OnSave(save, rocket);
-                __result = save;
             }
         }
     }
